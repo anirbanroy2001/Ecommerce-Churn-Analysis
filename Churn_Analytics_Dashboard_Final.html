@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E-Commerce Churn Analytics Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --dark: #1A2340; --teal: #028090; --mint: #02C39A;
+    --red: #E24B4A; --amber: #BA7517; --green: #1D9E75; --purple: #534AB7;
+    --bg: #F1F5F9; --card: #FFFFFF; --text: #1E293B; --muted: #64748B;
+    --border: #E2E8F0;
+  }
+  body { font-family: Arial, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; transition: background 0.3s; }
+  
+  /* Header */
+  .header { background: var(--dark); color: white; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; transition: all 0.3s; }
+  .header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .header .sub { font-size: 12px; color: #8CA0BC; margin-top: 2px; }
+  .badge-group { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .badge { background: var(--teal); color: white; font-size: 11px; padding: 4px 12px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+  .creator-tag { font-size: 10px; color: #8CA0BC; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Nav */
+  .nav { background: white; border-bottom: 1px solid var(--border); display: flex; gap: 0; padding: 0 24px; overflow-x: auto; scrollbar-width: none; }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav-btn { padding: 10px 18px; border: none; background: none; font-size: 13px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; font-family: Arial, sans-serif; font-weight: 500; transition: all .15s; white-space: nowrap; }
+  .nav-btn:hover { color: var(--teal); }
+  .nav-btn.active { color: var(--teal); border-bottom-color: var(--teal); }
+
+  /* Pages */
+  .page { display: none; padding: 20px 24px; animation: fadeIn .2s ease; }
+  .page.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* KPI Strip */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: var(--card); border-radius: 10px; padding: 14px 18px; border: 1px solid var(--border); }
+  .kpi .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .kpi .value { font-size: 28px; font-weight: 700; line-height: 1; }
+  .kpi .delta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* Grid */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid-1 { margin-bottom: 16px; }
+  .card { background: var(--card); border-radius: 10px; border: 1px solid var(--border); padding: 18px; }
+  .card h3 { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .card .sub { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+  canvas { max-height: 220px; width: 100% !important; }
+
+  /* Segment cards */
+  .seg-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 16px; }
+  .seg-card { background: var(--card); border-radius: 10px; border-top: 4px solid; padding: 14px; border-left: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .seg-card .seg-name { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+  .seg-card .seg-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .seg-card .seg-row:last-child { border-bottom: none; }
+  .seg-card .seg-row .lbl { color: var(--muted); }
+  .seg-card .seg-row .val { font-weight: 600; }
+  .seg-card .tag { margin-top: 10px; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; text-align: center; }
+
+  /* Rec cards */
+  .rec-list { display: flex; flex-direction: column; gap: 12px; }
+  .rec-card { background: var(--card); border-radius: 10px; border: 1px solid var(--border); display: flex; align-items: flex-start; gap: 14px; padding: 16px; }
+  .rec-num { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; color: white; flex-shrink: 0; margin-top: 2px; }
+  .rec-body { flex: 1; }
+  .rec-body h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .rec-body p { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .rec-impact { font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; white-space: nowrap; align-self: flex-start; margin-top: 4px; }
+
+  /* Roadmap */
+  .roadmap { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+  .phase { background: var(--card); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; }
+  .phase-header { padding: 12px 16px; }
+  .phase-header .phase-label { font-size: 11px; color: white; opacity: .8; }
+  .phase-header .phase-title { font-size: 15px; font-weight: 700; color: white; }
+  .phase-body { padding: 14px 16px; }
+  .phase-item { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; align-items: flex-start; }
+  .phase-item:last-child { border-bottom: none; }
+  .phase-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+
+  /* Filter bar */
+  .filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; }
+  .filter-bar label { font-size: 12px; color: var(--muted); }
+  .filter-bar select { font-size: 12px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: white; color: var(--text); font-family: Arial, sans-serif; cursor: pointer; }
+
+  /* Model table */
+  .model-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .model-table th { background: var(--dark); color: white; padding: 10px 14px; text-align: left; font-size: 12px; font-weight: 600; }
+  .model-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .model-table tr:last-child td { border-bottom: none; }
+  .model-table tr.best td { background: #F0FDF4; font-weight: 600; color: #166534; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+
+  /* 📱 MOBILE VIEW OVERRIDES */
+  .mobile-view .header { flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px; }
+  .mobile-view .header-actions { width: 100%; display: flex; justify-content: space-between; align-items: flex-end; }
+  .mobile-view .badge-group { align-items: flex-end; }
+  .mobile-view .header h1 { font-size: 16px; }
+  .mobile-view .header .sub { font-size: 11px; }
+  .mobile-view .nav { padding: 0 12px; }
+  .mobile-view .page { padding: 16px 12px; }
+  .mobile-view .kpi-row { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .mobile-view .kpi { padding: 12px; }
+  .mobile-view .kpi .value { font-size: 22px; }
+  .mobile-view .grid-2, .mobile-view .grid-3 { grid-template-columns: 1fr; gap: 12px; }
+  .mobile-view .seg-grid { grid-template-columns: 1fr; gap: 12px; }
+  .mobile-view .roadmap { grid-template-columns: 1fr; gap: 12px; }
+  .mobile-view .card { padding: 14px; }
+  .mobile-view .model-table { font-size: 11px; }
+  .mobile-view .model-table th, .mobile-view .model-table td { padding: 8px 10px; }
+
+  /* TOGGLE SWITCH STYLE */
+  .toggle-container { display: flex; align-items: center; gap: 10px; }
+  .toggle-label { font-size: 11px; color: #8CA0BC; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #334155; transition: .3s; border-radius: 24px; border: 1px solid #475569; }
+  .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  input:checked + .slider { background-color: var(--teal); border-color: var(--teal); }
+  input:checked + .slider:before { transform: translateX(18px); }
+</style>
+</head>
+<body id="mainBody">
+
+<div class="header">
+  <div>
+    <h1>Global E-Commerce Churn Analytics Dashboard</h1>
+    <div class="sub">1,200 customers · 25 variables · June 2026</div>
+  </div>
+  <div class="header-actions">
+    <div class="toggle-container">
+      <span class="toggle-label">Mobile View</span>
+      <label class="switch">
+        <input type="checkbox" id="mobileToggle" onchange="toggleMobileView(this)">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="badge-group">
+      <span class="badge">Analytics Project</span>
+      <span class="creator-tag">Created By - Anirban Roy</span>
+    </div>
+  </div>
+</div>
+
+<nav class="nav">
+  <button class="nav-btn active" onclick="showPage('overview', this)">Overview</button>
+  <button class="nav-btn" onclick="showPage('eda', this)">EDA Insights</button>
+  <button class="nav-btn" onclick="showPage('model', this)">Prediction Model</button>
+  <button class="nav-btn" onclick="showPage('segments', this)">Segmentation</button>
+  <button class="nav-btn" onclick="showPage('recs', this)">Recommendations</button>
+</nav>
+
+<!-- ═══ PAGE: OVERVIEW ═══ -->
+<div class="page active" id="page-overview">
+  <div class="kpi-row">
+    <div class="kpi"><div class="label">Total Customers</div><div class="value" style="color:var(--dark)">1,200</div><div class="delta">Global dataset</div></div>
+    <div class="kpi"><div class="label">Overall Churn Rate</div><div class="value" style="color:var(--red)">67.3%</div><div class="delta">808 churned</div></div>
+    <div class="kpi"><div class="label">Model AUC (Best)</div><div class="value" style="color:var(--green)">1.000</div><div class="delta">Gradient Boosting</div></div>
+    <div class="kpi"><div class="label">Segments Found</div><div class="value" style="color:var(--purple)">4</div><div class="delta">K-Means clustering</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h3>Churn vs Active Split</h3>
+      <div class="sub">808 churned (67.3%) · 392 active (32.7%)</div>
+      <canvas id="donut1"></canvas>
+    </div>
+    <div class="card">
+      <h3>Churn Rate by Loyalty Tier</h3>
+      <div class="sub">Bronze → Platinum</div>
+      <canvas id="bar1"></canvas>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h3>Churn Rate by Satisfaction</h3>
+      <div class="sub">Scores 1–5</div>
+      <canvas id="bar2"></canvas>
+    </div>
+    <div class="card">
+      <h3>Avg Days Since Last Purchase</h3>
+      <div class="sub">Churned vs active comparison</div>
+      <canvas id="bar3"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: EDA ═══ -->
+<div class="page" id="page-eda">
+  <div class="filter-bar">
+    <label>Filter by:</label>
+    <select id="edaFilter" onchange="updateEDA()">
+      <option value="category">Product Category</option>
+      <option value="channel">Acquisition Channel</option>
+      <option value="device">Device Type</option>
+      <option value="gender">Gender</option>
+      <option value="region">Region</option>
+    </select>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h3 id="edaTitle">Churn Rate by Product Category</h3>
+      <div class="sub">Dashed line = overall average (67.3%)</div>
+      <canvas id="edaBar" style="max-height:280px"></canvas>
+    </div>
+    <div class="card">
+      <h3>Spend Distribution</h3>
+      <div class="sub">Active ($7,282) vs Churned ($4,339)</div>
+      <canvas id="spendBar"></canvas>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <h3>Churn Rate by Income Bracket</h3>
+    <div class="sub">Satisfaction drives more variance than income</div>
+    <canvas id="incomBar" style="max-height:180px"></canvas>
+  </div>
+</div>
+
+<!-- ═══ PAGE: MODEL ═══ -->
+<div class="page" id="page-model">
+  <div class="kpi-row">
+    <div class="kpi"><div class="label">Best Model</div><div class="value" style="color:var(--green);font-size:20px">Gradient Boosting</div><div class="delta">Selected for deployment</div></div>
+    <div class="kpi"><div class="label">ROC-AUC</div><div class="value" style="color:var(--green)">1.000</div><div class="delta">Perfect discrimination</div></div>
+    <div class="kpi"><div class="label">Precision</div><div class="value" style="color:var(--teal)">1.000</div><div class="delta">Churned class</div></div>
+    <div class="kpi"><div class="label">Recall</div><div class="value" style="color:var(--teal)">1.000</div><div class="delta">Churned class</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h3>Model Comparison — ROC-AUC</h3>
+      <div class="sub">Gradient Boosting selected as best</div>
+      <canvas id="modelBar"></canvas>
+    </div>
+    <div class="card">
+      <h3>Top 10 Feature Importances</h3>
+      <div class="sub">Behavioural signals dominate</div>
+      <canvas id="featBar" style="max-height:240px"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Full Model Comparison Table</h3>
+    <div class="sub" style="margin-bottom:12px">Evaluated on held-out 20% test set</div>
+    <div style="overflow-x: auto;">
+      <table class="model-table">
+        <thead>
+          <tr><th>Model</th><th>ROC-AUC</th><th>Precision</th><th>Recall</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Logistic Regression</td><td>0.996</td><td>0.987</td><td>0.944</td><td><span class="pill" style="background:#F1F5F9;color:var(--muted)">Baseline</span></td></tr>
+          <tr><td>Random Forest</td><td>0.999</td><td>0.994</td><td>1.000</td><td><span class="pill" style="background:#EFF6FF;color:#1D4ED8">Strong</span></td></tr>
+          <tr class="best"><td>Gradient Boosting ★</td><td>1.000</td><td>1.000</td><td>1.000</td><td><span class="pill" style="background:#DCFCE7;color:#166534">Best</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: SEGMENTS ═══ -->
+<div class="page" id="page-segments">
+  <div class="seg-grid">
+    <div class="seg-card" style="border-top-color:var(--amber)">
+      <div class="seg-name" style="color:var(--amber)">Champions</div>
+      <div class="seg-row"><span class="lbl">Customers</span><span class="val">80</span></div>
+      <div class="seg-row"><span class="lbl">Avg Spend</span><span class="val">$32,933</span></div>
+      <div class="seg-row"><span class="lbl">Churn Rate</span><span class="val" style="color:var(--amber)">50%</span></div>
+      <div class="tag" style="background:#FEF3C7;color:var(--amber)">Protect & deepen</div>
+    </div>
+    <div class="seg-card" style="border-top-color:var(--green)">
+      <div class="seg-name" style="color:var(--green)">Loyal Regulars</div>
+      <div class="seg-row"><span class="lbl">Customers</span><span class="val">201</span></div>
+      <div class="seg-row"><span class="lbl">Avg Spend</span><span class="val">$3,688</span></div>
+      <div class="seg-row"><span class="lbl">Churn Rate</span><span class="val" style="color:var(--amber)">68%</span></div>
+      <div class="tag" style="background:#D1FAE5;color:var(--green)">Tier upgrade focus</div>
+    </div>
+    <div class="seg-card" style="border-top-color:var(--purple)">
+      <div class="seg-name" style="color:var(--purple)">New / Low-Value</div>
+      <div class="seg-row"><span class="lbl">Customers</span><span class="val">430</span></div>
+      <div class="seg-row"><span class="lbl">Avg Spend</span><span class="val">$2,826</span></div>
+      <div class="seg-row"><span class="lbl">Churn Rate</span><span class="val" style="color:var(--red)">98%</span></div>
+      <div class="tag" style="background:#EDE9FE;color:var(--purple)">Fix onboarding</div>
+    </div>
+    <div class="seg-card" style="border-top-color:var(--red)">
+      <div class="seg-name" style="color:var(--red)">At-Risk</div>
+      <div class="seg-row"><span class="lbl">Customers</span><span class="val">489</span></div>
+      <div class="seg-row"><span class="lbl">Avg Spend</span><span class="val">$3,617</span></div>
+      <div class="seg-row"><span class="lbl">Churn Rate</span><span class="val" style="color:var(--amber)">43%</span></div>
+      <div class="tag" style="background:#FEE2E2;color:var(--red)">Win-back campaign</div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h3>Segment Size Distribution</h3>
+      <div class="sub">New/Low-Value dominates</div>
+      <canvas id="segPie"></canvas>
+    </div>
+    <div class="card">
+      <h3>Churn Rate by Segment</h3>
+      <div class="sub">Overall average 67.3%</div>
+      <canvas id="segChurnBar"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: RECOMMENDATIONS ═══ -->
+<div class="page" id="page-recs">
+  <div class="rec-list" style="margin-bottom:20px">
+    <div class="rec-card">
+      <div class="rec-num" style="background:var(--red)">1</div>
+      <div class="rec-body">
+        <h4>Resolve the Onboarding Gap</h4>
+        <p>New/Low-Value customers have a 98% churn rate. Redesign the post-purchase experience with automated tutorials and high-value incentives for the second order.</p>
+      </div>
+      <span class="rec-impact" style="background:#FEE2E2;color:var(--red)">Impact: Very High</span>
+    </div>
+    <div class="rec-card">
+      <div class="rec-num" style="background:var(--amber)">2</div>
+      <div class="rec-body">
+        <h4>Predictive Win-back Campaigns</h4>
+        <p>Target the "At-Risk" segment with model-triggered personalized offers when satisfaction scores dip or days since last purchase exceeds 45 days.</p>
+      </div>
+      <span class="rec-impact" style="background:#FEF3C7;color:var(--amber)">Impact: High</span>
+    </div>
+    <div class="rec-card">
+      <div class="rec-num" style="background:var(--teal)">3</div>
+      <div class="rec-body">
+        <h4>VIP Loyalty Deepening</h4>
+        <p>Champions represent only 6.6% of customers but drive disproportionate revenue. Implement an exclusive VIP concierge tier to reduce their 50% churn risk.</p>
+      </div>
+      <span class="rec-impact" style="background:#E0F2FE;color:var(--teal)">Impact: Medium</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Strategic Implementation Roadmap</h3>
+    <div class="sub">3-Phase execution plan based on data findings</div>
+    <div class="roadmap">
+      <div class="phase">
+        <div class="phase-header" style="background:var(--red)">
+          <div class="phase-label">Phase 1</div>
+          <div class="phase-title">Critical Defense</div>
+        </div>
+        <div class="phase-body">
+          <div class="phase-item"><div class="phase-dot" style="background:var(--red)"></div>Onboarding redesign</div>
+          <div class="phase-item"><div class="phase-dot" style="background:var(--red)"></div>Win-back pilots</div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="phase-header" style="background:var(--amber)">
+          <div class="phase-label">Phase 2</div>
+          <div class="phase-title">Operational Growth</div>
+        </div>
+        <div class="phase-body">
+          <div class="phase-item"><div class="phase-dot" style="background:var(--amber)"></div>Loyalty tier refresh</div>
+          <div class="phase-item"><div class="phase-dot" style="background:var(--amber)"></div>Channel optimization</div>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="phase-header" style="background:var(--teal)">
+          <div class="phase-label">Phase 3</div>
+          <div class="phase-title">Strategic Scale</div>
+        </div>
+        <div class="phase-body">
+          <div class="phase-item"><div class="phase-dot" style="background:var(--teal)"></div>LTV prediction</div>
+          <div class="phase-item"><div class="phase-dot" style="background:var(--teal)"></div>AI Personalization</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── GLOBALS ──────────────────────────────────────────────────────────────────
+var RED    = '#E24B4A';
+var TEAL   = '#028090';
+var MINT   = '#02C39A';
+var AMBER  = '#BA7517';
+var GREEN  = '#1D9E75';
+var PURPLE = '#534AB7';
+var MUTED  = '#64748B';
+
+Chart.defaults.font.family = 'Arial';
+Chart.defaults.color = '#64748B';
+
+// ── CORE LOGIC ───────────────────────────────────────────────────────────────
+function showPage(pageId, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + pageId).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  Object.values(Chart.instances).forEach(chart => chart.resize());
+}
+
+function toggleMobileView(checkbox) {
+  if (checkbox.checked) {
+    document.body.classList.add('mobile-view');
+  } else {
+    document.body.classList.remove('mobile-view');
+  }
+  setTimeout(() => {
+    Object.values(Chart.instances).forEach(chart => {
+      chart.resize();
+    });
+  }, 100);
+}
+
+// Auto-detect mobile on load
+window.addEventListener('DOMContentLoaded', () => {
+  if (window.innerWidth < 768) {
+    document.getElementById('mobileToggle').checked = true;
+    document.body.classList.add('mobile-view');
+  }
+});
+
+// ── PLUGINS ──────────────────────────────────────────────────────────────────
+function avgLinePlugin(val, label) {
+  return {
+    id: 'avgLine',
+    afterDraw: function(chart) {
+      var ctx = chart.ctx;
+      var yAxis = chart.scales.y;
+      var y = yAxis.getPixelForValue(val);
+      ctx.save();
+      ctx.beginPath();
+      ctx.setLineDash([5, 5]);
+      ctx.moveTo(chart.chartArea.left, y);
+      ctx.lineTo(chart.chartArea.right, y);
+      ctx.strokeStyle = '#94A3B8';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = '#64748B';
+      ctx.font = 'bold 10px Arial';
+      ctx.fillText(label, chart.chartArea.right - 60, y - 5);
+      ctx.restore();
+    }
+  };
+}
+
+// ── CHARTS: OVERVIEW ─────────────────────────────────────────────────────────
+
+// Donut
+new Chart(document.getElementById('donut1'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Churned', 'Active'],
+    datasets: [{
+      data: [67.3, 32.7],
+      backgroundColor: [RED, TEAL],
+      borderWidth: 0,
+      hoverOffset: 4
+    }]
+  },
+  options: {
+    cutout: '65%',
+    plugins: {
+      legend: { position: 'right' },
+      tooltip: { callbacks: { label: function(c) { return c.label + ': ' + c.raw + '%'; } } }
+    }
+  }
+});
+
+// Loyalty Bar
+new Chart(document.getElementById('bar1'), {
+  type: 'bar',
+  data: {
+    labels: ['Bronze', 'Silver', 'Gold', 'Platinum'],
+    datasets: [{
+      data: [91.4, 73.2, 54.8, 32.1],
+      backgroundColor: [RED, AMBER, TEAL, GREEN],
+      borderRadius: 6
+    }]
+  },
+  options: {
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { ticks: { callback: function(v) { return v + '%'; } }, grid: { color: '#F1F5F9' }, max: 100 },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// Satisfaction Bar
+new Chart(document.getElementById('bar2'), {
+  type: 'bar',
+  data: {
+    labels: ['Score 1', 'Score 2', 'Score 3', 'Score 4', 'Score 5'],
+    datasets: [{
+      data: [93.1, 92.4, 71.0, 58.3, 42.1],
+      backgroundColor: [RED, RED, AMBER, TEAL, GREEN],
+      borderRadius: 6
+    }]
+  },
+  options: {
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { ticks: { callback: function(v) { return v + '%'; } }, grid: { color: '#F1F5F9' }, max: 100 },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// Days Since Last Purchase
+new Chart(document.getElementById('bar3'), {
+  type: 'bar',
+  data: {
+    labels: ['Active', 'Churned'],
+    datasets: [{
+      data: [18.2, 94.6],
+      backgroundColor: [TEAL, RED],
+      borderRadius: 6
+    }]
+  },
+  options: {
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { title: { display: true, text: 'Avg Days' }, grid: { color: '#F1F5F9' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// ── CHARTS: EDA ─────────────────────────────────────────────────────────────
+
+var edaData = {
+  category: {
+    labels: ['Electronics', 'Home/Kitchen', 'Fashion', 'Beauty', 'Grocery'],
+    data: [78.4, 71.2, 65.5, 59.1, 42.8],
+    colors: [RED, RED, AMBER, TEAL, GREEN],
+    title: 'Churn Rate by Product Category'
+  },
+  channel: {
+    labels: ['Referral', 'Organic', 'Direct', 'Paid Social', 'Paid Search'],
+    data: [31.2, 54.5, 66.8, 81.2, 84.4],
+    colors: [GREEN, TEAL, AMBER, RED, RED],
+    title: 'Churn Rate by Acquisition Channel'
+  },
+  device: {
+    labels: ['Mobile App', 'Desktop Web', 'Mobile Web', 'Tablet'],
+    data: [41.2, 68.4, 84.1, 88.5],
+    colors: [GREEN, AMBER, RED, RED],
+    title: 'Churn Rate by Device Type'
+  },
+  gender: {
+    labels: ['Male', 'Female', 'Non-binary', 'Prefer not to say'],
+    data: [68.2, 66.4, 69.1, 65.5],
+    colors: [TEAL, TEAL, TEAL, TEAL],
+    title: 'Churn Rate by Gender'
+  },
+  region: {
+    labels: ['North America', 'Europe', 'Asia-Pacific', 'Latin America', 'ME-Africa'],
+    data: [54.2, 58.1, 74.4, 82.1, 88.9],
+    colors: [TEAL, TEAL, AMBER, RED, RED],
+    title: 'Churn Rate by Region'
+  }
+};
+
+var edaChart = new Chart(document.getElementById('edaBar'), {
+  type: 'bar',
+  data: {
+    labels: edaData.category.labels,
+    datasets: [{ data: edaData.category.data, backgroundColor: edaData.category.colors, borderRadius: 6 }]
+  },
+  options: {
+    indexAxis: 'y',
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { callback: function(v) { return v + '%'; } }, grid: { color: '#F1F5F9' }, max: 100 },
+      y: { grid: { display: false } }
+    }
+  },
+  plugins: [avgLinePlugin(67.3, 'Avg 67.3%')]
+});
+
+function updateEDA() {
+  var key = document.getElementById('edaFilter').value;
+  var d = edaData[key];
+  document.getElementById('edaTitle').textContent = d.title;
+  edaChart.data.labels = d.labels;
+  edaChart.data.datasets[0].data = d.data;
+  edaChart.data.datasets[0].backgroundColor = d.colors;
+  edaChart.update();
+}
+
+// Spend Bar
+new Chart(document.getElementById('spendBar'), {
+  type: 'bar',
+  data: {
+    labels: ['Active', 'Churned'],
+    datasets: [{
+      data: [7282, 4339],
+      backgroundColor: [TEAL, RED],
+      borderRadius: 6
+    }]
+  },
+  options: {
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { ticks: { callback: function(v) { return '$' + v.toLocaleString(); } }, grid: { color: '#F1F5F9' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// Income Bar
+new Chart(document.getElementById('incomBar'), {
+  type: 'bar',
+  data: {
+    labels: ['Low (<$30k)', 'Medium ($30-70k)', 'High ($70-120k)', 'Very High ($120k+)'],
+    datasets: [{
+      data: [74.2, 68.5, 62.1, 58.4],
+      backgroundColor: [RED, AMBER, TEAL, GREEN],
+      borderRadius: 6
+    }]
+  },
+  options: {
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { ticks: { callback: function(v) { return v + '%'; } }, grid: { color: '#F1F5F9' }, max: 100 },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// ── CHARTS: MODEL ───────────────────────────────────────────────────────────
+
+// Model Bar
+new Chart(document.getElementById('modelBar'), {
+  type: 'bar',
+  data: {
+    labels: ['Logistic Regression', 'Random Forest', 'Gradient Boosting'],
+    datasets: [{
+      data: [0.996, 0.999, 1.000],
+      backgroundColor: [MUTED, TEAL, GREEN],
+      borderRadius: 6
+    }]
+  },
+  options: {
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { min: 0.98, max: 1.0, grid: { color: '#F1F5F9' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// Feature Importance
+new Chart(document.getElementById('featBar'), {
+  type: 'bar',
+  data: {
+    labels: ['Days Since Last Purchase', 'Satisfaction Score', 'Loyalty Tier', 'Avg Order Value', 'Total Spend', 'Items per Order', 'Acquisition Channel', 'Product Category', 'Device Type', 'Region'],
+    datasets: [{
+      data: [28.4, 21.2, 14.8, 11.3, 8.7, 6.4, 4.2, 2.5, 1.8, 0.7],
+      backgroundColor: [RED, RED, AMBER, AMBER, TEAL, TEAL, PURPLE, PURPLE, MUTED, MUTED],
+      borderRadius: 4
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { callback: function(v) { return v + '%'; } }, grid: { color: '#F1F5F9' } },
+      y: { grid: { display: false } }
+    }
+  }
+});
+
+// ── CHARTS: SEGMENTS ────────────────────────────────────────────────────────
+
+// Segment Pie
+new Chart(document.getElementById('segPie'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Champions', 'Loyal Regulars', 'New / Low-Value', 'At-Risk'],
+    datasets: [{
+      data: [80, 201, 430, 489],
+      backgroundColor: [AMBER, GREEN, PURPLE, RED],
+      borderWidth: 0
+    }]
+  },
+  options: {
+    cutout: '60%',
+    plugins: { legend: { position: 'right' } }
+  }
+});
+
+// Segment Churn Bar
+new Chart(document.getElementById('segChurnBar'), {
+  type: 'bar',
+  data: {
+    labels: ['Champions', 'Loyal Regulars', 'New / Low-Value', 'At-Risk'],
+    datasets: [{
+      data: [50.0, 68.2, 98.1, 43.4],
+      backgroundColor: [AMBER, GREEN, PURPLE, RED],
+      borderRadius: 6
+    }]
+  },
+  options: {
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { ticks: { callback: function(v) { return v + '%'; } }, grid: { color: '#F1F5F9' }, max: 100 },
+      x: { grid: { display: false } }
+    }
+  },
+  plugins: [avgLinePlugin(67.3, 'Avg 67.3%')]
+});
+</script>
+</body>
+</html>
